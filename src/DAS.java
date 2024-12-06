@@ -3,9 +3,14 @@ import java.net.SocketException;
 /**
  * Main class for the Distributed Averaging System (DAS).
  * Determines whether to run in master or slave mode based on port availability.
+ *
+ * If the port is available, it initializes and starts the master mode.
+ * If the port is not available (possibly in use by another instance),
+ * it initializes and starts the slave mode.
  */
 public class DAS {
     public static void main(String[] args) {
+
         if (args.length != 2) {
             System.out.println("Usage: java DAS <port> <number>");
             return;
