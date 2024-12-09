@@ -17,8 +17,7 @@ import java.util.ArrayList;
  * @throws SocketException If the socket cannot be opened or bound to the specified port.
  */
 public class Master implements Startable {
-
-    /** The port number on which the server operates. */
+/** The port number on which the server operates. */
     private final int port;
 
     /** The initial number received to be added to the list of numbers. */
@@ -93,11 +92,44 @@ public class Master implements Startable {
         return (int)Math.floor(sum / receivedNumbers.size());
     }
 
-    /**
-     * Sends the specified message to the broadcast address.
-     *
-     * @param message The message to be sent.
-     */
+    private InetAddress calculateBroadcastAddress(InetAddress networkAddress, int subnetMaskLength) throws UnknownHostException {
+        byte[] networkBytes = networkAddress.getAddress();
+        int invertedMask = ((1 << (32 - subnetMaskLength)) - 1);
+        byte[] broadcastBytes = new byte[networkBytes.length];
+        for (int i = 0; i < networkBytes.length; i++) {
+            broadcastBytes[i] = (byte) (networkBytes[i] | (invertedMask >> (i * 8)));
+        }
+        return InetAddress.getByAddress(broadcastBytes);
+    }
+
+    private InetAddress getNetworkAddress(InetAddress hostAddress, int subnetMaskLength) throws UnknownHostException {
+        byte[] hostBytes = hostAddress.getAddress();
+        int mask = ~((1 << (32 - subnetMaskLength)) - 1);
+        byte[] networkBytes = new byte[hostBytes.length];
+        for (int i = 0; i < hostBytes.length; i++) {
+            networkBytes[i] = (byte) (hostBytes[i] & (mask >> (i * 8)));
+        }
+        return InetAddress.getByAddress(networkBytes);
+    }
+
+    private InetAddress getBroadcastAddress() throws SocketException, UnknownHostException {
+        InetAddress hostAddress = InetAddress.getLocalHost();
+        NetworkInterface networkInterface = NetworkInterface.getByInetAddress(hostAddress);
+
+        if (networkInterface != null) {
+            for (InterfaceAddress interfaceAddress : networkInterface.getInterfaceAddresses()) {
+                InetAddress address = interfaceAddress.getAddress();
+                if (address.equals(hostAddress)) {
+                    int subnetMaskLength = interfaceAddress.getNetworkPrefixLength();
+                    InetAddress networkAddress = getNetworkAddress(hostAddress, subnetMaskLength);
+                    InetAddress broadcastAddress = calculateBroadcastAddress(networkAddress, subnetMaskLength);
+                    return broadcastAddress;
+                }
+            }
+        }
+        throw new SocketException("Broadcast address not found");
+    }
+
     private void broadcast(String message) {
         try {
             InetAddress broadcastAddress = getBroadcastAddress();
@@ -109,16 +141,4 @@ public class Master implements Startable {
         }
     }
 
-    /**
-     * Determines and returns the broadcast address for the current network.
-     *
-     * @return InetAddress representing the broadcast address.
-     * @throws UnknownHostException If the local host cannot be resolved into an address.
-     */
-    private InetAddress getBroadcastAddress() throws UnknownHostException {
-        InetAddress localHost = InetAddress.getLocalHost();
-        byte[] ip = localHost.getAddress();
-        ip[3] = (byte) 255; // Set the last byte to 255 for broadcasting
-        return InetAddress.getByAddress(ip);
-    }
 }
